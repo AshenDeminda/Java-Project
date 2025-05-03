@@ -58,6 +58,9 @@ public class AuthzenResponse<T> {
      */
     private void addResult(T data) {
         if (data != null) {
+            if (results == null) {
+                results = new ArrayList<>();
+            }
             results.add(data);
         }
     }
@@ -69,7 +72,10 @@ public class AuthzenResponse<T> {
      */
     public void addResults(List<T> data) {
         if (data != null) {
-            this.results.addAll(data);
+            if (results == null) {
+                results = new ArrayList<>();
+            }
+            results.addAll(data);
         }
     }
 

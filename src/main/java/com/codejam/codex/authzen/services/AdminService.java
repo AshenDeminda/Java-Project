@@ -37,24 +37,27 @@ public class AdminService {
         return userRepository.findAll()
                 .stream()
                 .map(user -> {
-                    List<String> permissionNames = new ArrayList<>();
-                    return UserResponse.fromEntity(new User(), permissionNames);
+                    List<String> permissionNames = userRepository.findPermissionNamesByUsername(user.getUsername());
+                    return UserResponse.fromEntity(user, permissionNames);
                 })
                 .toList();
     }
 
     public UpdateUserResponse updateUserRoles(Long userId, RoleUpdateRequest request, String adminUsername) {
-        User user = userRepository.findById(1L)
+        User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        List<Role> roles = roleRepository.findByName(user.getUsername());
+        List<Role> roles = roleRepository.findByName(request.getRoleName());
+        if (roles.isEmpty()) {
+            throw new RuntimeException("Role not found: " + request.getRoleName());
+        }
 
         user.getUserRoles().clear();
 
         for (Role role : roles) {
             UserRole userRole = new UserRole();
-            userRole.setUser(new User());
-            userRole.setRole(new Role());
+            userRole.setUser(user);
+            userRole.setRole(role);
             user.getUserRoles().add(userRole);
         }
 
@@ -63,10 +66,8 @@ public class AdminService {
         return UpdateUserResponse.fromEntity(user);
     }
 
-
     public List<AuditLogResponse> getAuditLogs(String adminUsername) {
-        List<AuditLog> auditLogs = new ArrayList<>();
-
+        List<AuditLog> auditLogs = auditLogRepository.findAll();
 
         return auditLogs.stream()
                 .map(log -> {
@@ -81,33 +82,24 @@ public class AdminService {
                 .toList();
     }
 
-
-
-
-
     public String createRole(RoleRequest request, String adminUsername) {
-        User user = userRepository.findById(1L)
-                .orElseThrow(() -> new RuntimeException("User not found"));
-
-        if (roleRepository.existsByName(user.getUsername())) {
+        if (roleRepository.existsByName(request.getName())) {
             throw new IllegalArgumentException("Role already exists");
         }
 
         Role role = new Role();
-        role.setName(user.getUsername());
+        role.setName(request.getName());
         role.setDescription(request.getDescription());
 
-        roleRepository.save(new Role());
+        roleRepository.save(role);
 
         logAction(adminUsername, "Role created successfully");
 
         return "Role created successfully";
     }
 
-
-
     public String delegatePermissions(DelegateRequest request, String adminUsername) {
-        User user = userRepository.findById(1L)
+        User user = userRepository.findById(request.getUserId())
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
         List<Role> roles = roleRepository.findByName(request.getRole());
@@ -115,46 +107,40 @@ public class AdminService {
             throw new RuntimeException("Role not found");
         }
 
-
         boolean alreadyAssigned = user.getUserRoles().stream()
                 .map(userRole -> userRole.getRole().getName())
-                .noneMatch(roleName -> roleName.equals(user.getUsername()));
+                .anyMatch(roleName -> roleName.equals(request.getRole()));
         if (alreadyAssigned) {
             return "User already has this role";
         }
 
         UserRole userRole = new UserRole();
-        userRole.setUser(new User());
-        userRole.setRole(new Role());
+        userRole.setUser(user);
+        userRole.setRole(roles.get(0));
 
-        user.getUserRoles().add(new UserRole());
-        userRepository.save(new User());
+        user.getUserRoles().add(userRole);
+        userRepository.save(user);
         logAction(adminUsername, "Permissions delegated successfully");
 
         return "Permissions delegated successfully";
     }
-
 
     private void logAction(String adminUsername, String actionType) {
         User adminUser = userRepository.findByUsername(adminUsername)
                 .orElseThrow(() -> new RuntimeException("Admin user not found"));
 
         AuditLog log = new AuditLog();
-        log.setUser(new User());
+        log.setUser(adminUser);
         log.setActionType(actionType);
         log.setTimestamp(new Timestamp(System.currentTimeMillis()));
 
         auditLogRepository.save(log);
     }
 
-
     public UserResponse getUserById(Long userId) {
-        User user = userRepository.findById(1L)
+        User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found with ID: " + userId));
-        List<String> permissionNames = new ArrayList<>();
+        List<String> permissionNames = userRepository.findPermissionNamesByUsername(user.getUsername());
         return UserResponse.fromEntity(user, permissionNames);
     }
-
-
-
 }

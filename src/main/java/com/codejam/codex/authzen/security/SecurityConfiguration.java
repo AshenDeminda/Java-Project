@@ -55,7 +55,6 @@ public class SecurityConfiguration {
     /**
      * Custom JWT Authentication Converter to extract roles from token claims.
      * Roles must be defined in the "roles" claim without any prefix.
-     *
      */
     @Bean
     public JwtAuthenticationConverter jwtAuthenticationConverter() {
@@ -80,8 +79,6 @@ public class SecurityConfiguration {
 
         return converter;
     }
-
-
 
     /**
      * Main Security Filter Chain configuration.
@@ -109,7 +106,6 @@ public class SecurityConfiguration {
                                 "/swagger-ui/**",
                                 "/reset-password/**",
                                 "/api/authenticate/health",
-                                "/swagger-ui/**",
                                 "/v3/api-docs/**",
                                 "/swagger-resources/**",
                                 "/webjars/**"
@@ -136,13 +132,12 @@ public class SecurityConfiguration {
     }
 
     /**
-     * Configures a basic CORS filter allowing all origins, headers, and common methods.
-     * NOTE: Adjust allowed origins for production environments.
+     * Configures a basic CORS filter allowing specific origins, headers, and common methods.
      */
     @Bean
     public CorsFilter corsFilter() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(List.of("*")); // Consider restricting in production
+        config.setAllowedOrigins(List.of("https://your-domain.com", "http://localhost:3000")); // Adjust for production
         config.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(Arrays.asList("Authorization", "Content-Type"));
 

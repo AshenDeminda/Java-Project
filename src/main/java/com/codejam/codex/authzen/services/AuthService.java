@@ -17,7 +17,6 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
 
-
 @Service
 public class AuthService {
 
@@ -55,7 +54,6 @@ public class AuthService {
      * @return true if registration was successful, false otherwise.
      */
     public UserResponse registerUser(RegisterRequest request) {
-
         List<Role> roles = roleRepository.findByName("ROLE_USER");
         if (roles.isEmpty()) {
             throw new RuntimeException("Default role not found: ROLE_USER");
@@ -70,16 +68,15 @@ public class AuthService {
         user.setCreatedAt(new java.sql.Timestamp(System.currentTimeMillis()));
 
         UserRole userRoleMapping = new UserRole();
-        userRoleMapping.setUser(new User());
+        userRoleMapping.setUser(user);
         userRoleMapping.setRole(userRole);
         user.getUserRoles().add(userRoleMapping);
 
-        userRepository.save(new User());
+        userRepository.save(user);
         List<String> permissionNames = new ArrayList<>();
 
-        return UserResponse.fromEntity(new User(), permissionNames);
+        return UserResponse.fromEntity(user, permissionNames);
     }
-
 
     /**
      * Authenticates a user and issues an access token.
@@ -91,7 +88,7 @@ public class AuthService {
         Optional<User> userOptional = userRepository.findByEmail(request.getEmail());
         if (userOptional.isPresent()) {
             User user = userOptional.get();
-            if (request.getPassword().equals(user.getPassword())) {
+            if (passwordEncoder.matches(request.getPassword(), user.getPassword())) {
                 UserResponse userResponse = userService.loadUserByUsername(user.getEmail());
                 List<String> permissionNames = userRepository.findPermissionNamesByUsername(user.getUsername());
                 userResponse.setPermissions(permissionNames);
@@ -116,8 +113,11 @@ public class AuthService {
             Map<String, Object> githubUser = oAuthService.getGithubUser(oAuthAccessToken);
 
             String githubId = githubUser.get("id").toString();
-            String githubEmail = (String) githubUser.get("email");
-            String githubLogin = (String) githubUser.get("login");
+            String githubEmail = githubUser.get("email") != null ? githubUser.get("email").toString() : null;
+            String githubLogin = githubUser.get("login") != null ? githubUser.get("login").toString() : githubUser.get("id").toString();
+            if (githubEmail == null) {
+                throw new RuntimeException("GitHub email not provided");
+            }
 
             Optional<OauthProvider> providerOpt = oauthProviderRepository.findByProviderAndExternalUserId("github", githubId);
             User user;
@@ -135,6 +135,12 @@ public class AuthService {
                             .isLocked(false)
                             .userRoles(new HashSet<>())
                             .build();
+                    List<Role> roles = roleRepository.findByName("ROLE_USER");
+                    if (roles.isEmpty()) {
+                        throw new RuntimeException("Default role not found: ROLE_USER");
+                    }
+                    Role userRole = roles.get(0);
+                    user.getUserRoles().add(new UserRole(user, userRole));
                     user = userRepository.save(user);
                 }
                 oauthProviderRepository.save(OauthProvider.builder()
@@ -153,7 +159,6 @@ public class AuthService {
 
         return null;
     }
-
 
     /**
      * Sends a password reset email to the user.
@@ -184,7 +189,6 @@ public class AuthService {
         }
         return false;
     }
-
 
     /**
      * Resets the user's password using the provided token.
@@ -232,7 +236,7 @@ public class AuthService {
      */
     public boolean isAuthenticated(HttpServletRequest request) {
         final String token = extractTokenFromHeader(request);
-        if ((token == null || !jwtService.isTokenValid(token)) && isBlacklisted(token) ) {
+        if (token == null || isBlacklisted(token) || !jwtService.isTokenValid(token)) {
             return false;
         }
 
@@ -263,7 +267,7 @@ public class AuthService {
      */
     public String getUsername(HttpServletRequest request) {
         final String token = extractTokenFromHeader(request);
-        if ((token == null || !jwtService.isTokenValid(token)) && isBlacklisted(token) ) {
+        if (token == null || isBlacklisted(token) || !jwtService.isTokenValid(token)) {
             return null;
         }
         return jwtService.extractUsername(token);
@@ -290,7 +294,6 @@ public class AuthService {
      * @param token The refresh token to be saved.
      */
     private void saveRefreshToken(User user, String token) {
-
         RefreshToken refreshToken = RefreshToken.builder()
                 .user(user)
                 .token(token)
@@ -309,7 +312,6 @@ public class AuthService {
      * @throws RuntimeException if the refresh token is expired or invalid.
      */
     public TokenResponse refreshToken(String refreshToken) {
-
         RefreshToken tokenRecord = refreshTokenRepository.findByToken(refreshToken)
                 .orElseThrow(() -> new RuntimeException("Refresh token not found"));
 
@@ -365,6 +367,4 @@ public class AuthService {
     public boolean isBlacklisted(String token) {
         return blacklistedTokens.contains(token);
     }
-
-
 }
